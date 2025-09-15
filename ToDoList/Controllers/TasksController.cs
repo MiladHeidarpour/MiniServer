@@ -1,6 +1,7 @@
 ﻿using MiniServer.Core.Attributes;
 using MiniServer.Core.Http;
 using MiniServer.Core.Routing;
+using ToDoList.DTOs;
 using ToDoList.Models;
 
 namespace ToDoList.Controllers;
@@ -35,6 +36,26 @@ public class TasksController : BaseController
         {
             HttpContext.Response.WriteJson(task);
         }
+
+        return Task.CompletedTask;
+    }
+
+    [Route("POST", "/tasks")]
+    public Task CreateTask([FromBody] CreateTaskRequest request)
+    {
+        var newId = _tasks.Any() ? _tasks.Max(t => t.Id) + 1 : 1;
+
+        var newTask = new TodoTask
+        {
+            Id = newId,
+            Title = request.Title,
+            IsCompleted = false
+        };
+
+        _tasks.Add(newTask);
+
+        HttpContext.Response.StatusCode = 201; // 201 Created
+        HttpContext.Response.WriteJson(newTask);
 
         return Task.CompletedTask;
     }
