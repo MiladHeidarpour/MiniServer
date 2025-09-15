@@ -4,9 +4,16 @@ using System.Reflection;
 
 namespace MiniServer.Core.Routing;
 
+public class RouteEntry
+{
+    public string Method { get; set; }
+    public string Template { get; set; }
+    public MethodInfo MethodInfo { get; set; }
+}
+
 public class Router
 {
-    private readonly Dictionary<string, MethodInfo> _routes = new();
+    private readonly List<RouteEntry> _routes = new();
 
     public void RegisterRoutes(Assembly assembly)
     {
@@ -20,30 +27,79 @@ public class Router
             foreach (var method in methods)
             {
                 var routeAttribute = method.GetCustomAttribute<RouteAttribute>()!;
-                var routeKey = $"{routeAttribute.Method}:{routeAttribute.Path}";
-                _routes[routeKey] = method;
-                Console.WriteLine($"[Router] Mapped {routeKey} to {controllerType.Name}.{method.Name}");
+                _routes.Add(new RouteEntry
+                {
+                    Method = routeAttribute.Method,
+                    Template = routeAttribute.Path,
+                    MethodInfo = method
+                });
+                Console.WriteLine($"[Router] Mapped {routeAttribute.Method}:{routeAttribute.Path} to {controllerType.Name}.{method.Name}");
             }
         }
     }
 
     public async Task RouteRequestAsync(HttpContext context)
     {
-        var routeKey = $"{context.Request.Method}:{context.Request.Path}";
-
-        if (_routes.TryGetValue(routeKey, out var method))
+        foreach (var route in _routes)
         {
-            var controllerType = method.DeclaringType!;
-            var controllerInstance = (BaseController)Activator.CreateInstance(controllerType)!;
-            controllerInstance.SetContext(context);
+            if (route.Method != context.Request.Method) continue;
 
-            await (Task)method.Invoke(controllerInstance, null)!;
+            var routeValues = MatchRoute(route.Template, context.Request.Path);
+            if (routeValues != null)
+            {
+                var controllerType = route.MethodInfo.DeclaringType!;
+                var controllerInstance = (BaseController)Activator.CreateInstance(controllerType)!;
+                controllerInstance.SetContext(context);
+
+                var methodParams = PrepareParameters(route.MethodInfo, routeValues);
+
+                await (Task)route.MethodInfo.Invoke(controllerInstance, methodParams)!;
+                return;
+            }
         }
-        else
+
+        context.Response.StatusCode = 404;
+        context.Response.StatusMessage = "Not Found";
+        context.Response.Write("Route not found.");
+    }
+
+    private Dictionary<string, object> MatchRoute(string template, string path)
+    {
+        var templateParts = template.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var pathParts = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+
+        if (templateParts.Length != pathParts.Length) return null;
+
+        var routeValues = new Dictionary<string, object>();
+
+        for (int i = 0; i < templateParts.Length; i++)
         {
-            context.Response.StatusCode = 404;
-            context.Response.StatusMessage = "Not Found";
-            context.Response.Write("Route not found.");
+            if (templateParts[i].StartsWith("{") && templateParts[i].EndsWith("}"))
+            {
+                var key = templateParts[i].Trim('{', '}');
+                routeValues[key] = pathParts[i];
+            }
+            else if (templateParts[i] != pathParts[i])
+            {
+                return null;
+            }
         }
+        return routeValues;
+    }
+
+    private object[] PrepareParameters(MethodInfo method, Dictionary<string, object> routeValues)
+    {
+        var parameters = method.GetParameters();
+        var result = new object[parameters.Length];
+
+        for (int i = 0; i < parameters.Length; i++)
+        {
+            var param = parameters[i];
+            if (param.GetCustomAttribute<FromRouteAttribute>() != null && routeValues.TryGetValue(param.Name, out var value))
+            {
+                result[i] = Convert.ChangeType(value, param.ParameterType);
+            }
+        }
+        return result;
     }
 }
