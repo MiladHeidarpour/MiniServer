@@ -4,27 +4,24 @@ namespace MiniServer.Core.Middlewares;
 
 public class MiddlewarePipeline
 {
-    private readonly List<Type> _middlewares = new();
+    private readonly List<IMiddleware> _middlewares = new();
 
-    public void Use<T>() where T : IMiddleware
+    public void Use(IMiddleware middleware)
     {
-        _middlewares.Add(typeof(T));
+        _middlewares.Add(middleware);
     }
 
     public async Task ExecuteAsync(HttpContext context)
     {
         var index = 0;
-
         async Task Next()
         {
             if (index < _middlewares.Count)
             {
-                var middlewareType = _middlewares[index++];
-                var middleware = (IMiddleware)Activator.CreateInstance(middlewareType)!;
+                var middleware = _middlewares[index++];
                 await middleware.InvokeAsync(context, Next);
             }
         }
-
         await Next();
     }
 }

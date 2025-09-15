@@ -3,16 +3,28 @@ namespace MiniServer.Core.DI;
 
 public class ServiceProvider
 {
-    private readonly Dictionary<Type, Func<object>> _services = new();
+    private readonly Dictionary<Type, Func<object>> _transientFactories = new();
+    private readonly Dictionary<Type, object> _singletonInstances = new();
 
-    public ServiceProvider(Dictionary<Type, Func<object>> services)
+    public void RegisterSingleton<TInterface, TImplementation>() where TImplementation : TInterface
     {
-        _services = services;
+        var instance = (TInterface)Activator.CreateInstance(typeof(TImplementation))!;
+        _singletonInstances[typeof(TInterface)] = instance;
+    }
+
+    public void RegisterTransient<TInterface, TImplementation>() where TImplementation : TInterface
+    {
+        _transientFactories[typeof(TInterface)] = () => Activator.CreateInstance(typeof(TImplementation))!;
     }
 
     public object GetService(Type type)
     {
-        if (_services.TryGetValue(type, out var factory))
+        if (_singletonInstances.TryGetValue(type, out var singletonInstance))
+        {
+            return singletonInstance;
+        }
+
+        if (_transientFactories.TryGetValue(type, out var factory))
         {
             return factory();
         }
