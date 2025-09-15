@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using System.Text.Json;
 
 namespace MiniServer.Core.Http;
 
@@ -14,7 +15,12 @@ public class HttpResponse
         var buffer = Encoding.UTF8.GetBytes(content);
         _body.Write(buffer, 0, buffer.Length);
     }
-
+    public void WriteJson(object data)
+    {
+        Headers["Content-Type"] = "application/json";
+        var jsonString = JsonSerializer.Serialize(data);
+        Write(jsonString);
+    }
     internal byte[] GetResponseBytes()
     {
         var responseBuilder = new StringBuilder();
