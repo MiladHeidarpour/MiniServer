@@ -3,31 +3,39 @@ using MiniServer.Core.Http;
 using MiniServer.Core.Routing;
 using ToDoList.DTOs;
 using ToDoList.Models;
+using ToDoList.Services;
 
 namespace ToDoList.Controllers;
 
 public class TasksController : BaseController
 {
-    private static readonly List<TodoTask> _tasks = new()
-    {
-        new TodoTask { Id = 1, Title = "Learn about HTTP", IsCompleted = true },
-        new TodoTask { Id = 2, Title = "Build a Router", IsCompleted = true },
-        new TodoTask { Id = 3, Title = "Return JSON data", IsCompleted = false }
-    };
+    private readonly ITaskService _taskService;
 
+    public TasksController(ITaskService taskService)
+    {
+        _taskService = taskService;
+    }
+
+    /// <summary>
+    /// دریافت لیست تمام کارها
+    /// </summary>
     [Route("GET", "/tasks")]
     public Task GetAllTasks()
     {
-        HttpContext.Response.WriteJson(_tasks);
+        var tasks = _taskService.GetAll();
+        HttpContext.Response.WriteJson(tasks);
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// دریافت یک کار مشخص بر اساس شناسه (ID)
+    /// </summary>
     [Route("GET", "/tasks/{id}")]
     public Task GetTaskById([FromRoute] int id)
     {
-        var task = _tasks.FirstOrDefault(t => t.Id == id);
+        var task = _taskService.GetById(id);
 
-        if (task == null)
+        if (task is null)
         {
             HttpContext.Response.StatusCode = 404;
             HttpContext.Response.WriteJson(new { message = $"Task with ID {id} not found." });
@@ -40,58 +48,72 @@ public class TasksController : BaseController
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// ایجاد یک کار جدید
+    /// </summary>
     [Route("POST", "/tasks")]
     public Task CreateTask([FromBody] CreateTaskRequest request)
     {
-        var newId = _tasks.Any() ? _tasks.Max(t => t.Id) + 1 : 1;
-
-        var newTask = new TodoTask
+        if (request is null || string.IsNullOrWhiteSpace(request.Title))
         {
-            Id = newId,
-            Title = request.Title,
-            IsCompleted = false
-        };
+            HttpContext.Response.StatusCode = 400;
+            HttpContext.Response.WriteJson(new { message = "Task title cannot be empty." });
+            return Task.CompletedTask;
+        }
 
-        _tasks.Add(newTask);
+        var newTask = _taskService.Create(request);
 
-        HttpContext.Response.StatusCode = 201; // 201 Created
+        HttpContext.Response.StatusCode = 201;
         HttpContext.Response.WriteJson(newTask);
-
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// به‌روزرسانی یک کار موجود
+    /// </summary>
     [Route("PUT", "/tasks/{id}")]
     public Task UpdateTask([FromRoute] int id, [FromBody] UpdateTaskRequest request)
     {
-        var task = _tasks.FirstOrDefault(t => t.Id == id);
-        if (task == null)
+        if (request is null || string.IsNullOrWhiteSpace(request.Title))
         {
-            HttpContext.Response.StatusCode = 404;
-            HttpContext.Response.WriteJson(new { message = $"Task with ID {id} not found." });
+            HttpContext.Response.StatusCode = 400;
+            HttpContext.Response.WriteJson(new { message = "Task title cannot be empty." });
             return Task.CompletedTask;
         }
 
-        task.Title = request.Title;
-        task.IsCompleted = request.IsCompleted;
+        var updatedTask = _taskService.Update(id, request);
 
-        HttpContext.Response.WriteJson(task);
+        if (updatedTask is null)
+        {
+            HttpContext.Response.StatusCode = 404;
+            HttpContext.Response.WriteJson(new { message = $"Task with ID {id} not found." });
+        }
+        else
+        {
+            HttpContext.Response.WriteJson(updatedTask);
+        }
+
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// حذف یک کار
+    /// </summary>
     [Route("DELETE", "/tasks/{id}")]
     public Task DeleteTask([FromRoute] int id)
     {
-        var task = _tasks.FirstOrDefault(t => t.Id == id);
-        if (task == null)
+        var wasDeleted = _taskService.Delete(id);
+
+        if (!wasDeleted)
         {
             HttpContext.Response.StatusCode = 404;
             HttpContext.Response.WriteJson(new { message = $"Task with ID {id} not found." });
-            return Task.CompletedTask;
+        }
+        else
+        {
+            HttpContext.Response.StatusCode = 204;
         }
 
-        _tasks.Remove(task);
-
-        HttpContext.Response.StatusCode = 204; // 204 No Content
         return Task.CompletedTask;
     }
 }
