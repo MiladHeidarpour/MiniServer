@@ -59,4 +59,39 @@ public class TasksController : BaseController
 
         return Task.CompletedTask;
     }
+
+    [Route("PUT", "/tasks/{id}")]
+    public Task UpdateTask([FromRoute] int id, [FromBody] UpdateTaskRequest request)
+    {
+        var task = _tasks.FirstOrDefault(t => t.Id == id);
+        if (task == null)
+        {
+            HttpContext.Response.StatusCode = 404;
+            HttpContext.Response.WriteJson(new { message = $"Task with ID {id} not found." });
+            return Task.CompletedTask;
+        }
+
+        task.Title = request.Title;
+        task.IsCompleted = request.IsCompleted;
+
+        HttpContext.Response.WriteJson(task);
+        return Task.CompletedTask;
+    }
+
+    [Route("DELETE", "/tasks/{id}")]
+    public Task DeleteTask([FromRoute] int id)
+    {
+        var task = _tasks.FirstOrDefault(t => t.Id == id);
+        if (task == null)
+        {
+            HttpContext.Response.StatusCode = 404;
+            HttpContext.Response.WriteJson(new { message = $"Task with ID {id} not found." });
+            return Task.CompletedTask;
+        }
+
+        _tasks.Remove(task);
+
+        HttpContext.Response.StatusCode = 204; // 204 No Content
+        return Task.CompletedTask;
+    }
 }
