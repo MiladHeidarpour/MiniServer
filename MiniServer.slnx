@@ -1,1 +1,4 @@
-<Solution />
+<Solution>
+  <Project Path="MiniServer.Core/MiniServer.Core.csproj" Id="a72692a4-3176-400a-b331-e16016fe36ea" />
+  <Project Path="ToDoList/ToDoList.csproj" Id="6cc9291e-5047-493c-ae09-f8e5e3363447" />
+</Solution>
