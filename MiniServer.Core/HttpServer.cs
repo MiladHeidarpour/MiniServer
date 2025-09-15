@@ -1,8 +1,9 @@
 ﻿
 using MiniServer.Core.Http;
+using MiniServer.Core.Routing;
 using System.Net;
 using System.Net.Sockets;
-using System.Text;
+using System.Reflection;
 
 namespace MiniServer.Core;
 
@@ -10,11 +11,17 @@ public class HttpServer
 {
     private readonly TcpListener _listener;
     private readonly int _port;
+    private readonly Router _router;
 
     public HttpServer(int port = 8080)
     {
         _port = port;
         _listener = new TcpListener(IPAddress.Any, _port);
+        _router = new Router();
+    }
+    public void MapRoutes(Assembly assembly)
+    {
+        _router.RegisterRoutes(assembly);
     }
 
     public async Task StartAsync()
@@ -57,20 +64,8 @@ public class HttpServer
         var response = new HttpResponse();
         var context = new HttpContext(request, response);
 
-        if (context.Request.Path == "/")
-        {
-            context.Response.Write("Welcome to the homepage!");
-        }
-        else if (context.Request.Path == "/about")
-        {
-            context.Response.Write("This is the About page.");
-        }
-        else
-        {
-            context.Response.StatusCode = 404;
-            context.Response.StatusMessage = "Not Found";
-            context.Response.Write("Page not found.");
-        }
+        await _router.RouteRequestAsync(context);
+
         var responseBytes = context.Response.GetResponseBytes();
         await stream.WriteAsync(responseBytes);
 
