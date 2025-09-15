@@ -11,22 +11,14 @@ public class HttpServer
 {
     private readonly TcpListener _listener;
     private readonly int _port;
-    private readonly MiddlewarePipeline _pipeline;
+    private readonly Router _router;
 
-    public HttpServer(int port = 8080)
+    public HttpServer(Router router, int port = 8080)
     {
         _port = port;
         _listener = new TcpListener(IPAddress.Any, _port);
-
-        var router = new Router();
-        router.RegisterRoutes(Assembly.GetEntryAssembly()!);
-
-        _pipeline = new MiddlewarePipeline();
-        _pipeline.Use<LoggingMiddleware>();
         _router = router;
     }
-
-    private readonly Router _router;
 
     public async Task StartAsync()
     {
@@ -51,14 +43,26 @@ public class HttpServer
         var requestParts = requestLine.Split(' ');
         var request = new HttpRequest { Method = requestParts[0], Path = requestParts[1] };
 
+        string? line;
+        while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync()))
+        {
+            var headerParts = line.Split(':', 2);
+            if (headerParts.Length == 2) request.Headers[headerParts[0]] = headerParts[1].Trim();
+        }
+
+        if (request.Headers.TryGetValue("Content-Length", out var contentLengthStr) && int.TryParse(contentLengthStr, out var contentLength))
+        {
+            var buffer = new char[contentLength];
+            await reader.ReadBlockAsync(buffer, 0, contentLength);
+            var bodyBytes = System.Text.Encoding.UTF8.GetBytes(buffer);
+            await request.Body.WriteAsync(bodyBytes, 0, bodyBytes.Length);
+            request.Body.Position = 0;
+        }
+
         var response = new HttpResponse();
         var context = new HttpContext(request, response);
 
-        var loggingMiddleware = new LoggingMiddleware();
-        await loggingMiddleware.InvokeAsync(context, async () => {
-            var routingMiddleware = new RoutingMiddleware(_router);
-            await routingMiddleware.InvokeAsync(context, () => Task.CompletedTask);
-        });
+        await _router.RouteRequestAsync(context);
 
         var responseBytes = context.Response.GetResponseBytes();
         await stream.WriteAsync(responseBytes);

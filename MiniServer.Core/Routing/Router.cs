@@ -1,4 +1,5 @@
 ﻿using MiniServer.Core.Attributes;
+using MiniServer.Core.DI;
 using MiniServer.Core.Http;
 using System.Reflection;
 
@@ -14,7 +15,12 @@ public class RouteEntry
 public class Router
 {
     private readonly List<RouteEntry> _routes = new();
+    private readonly ServiceProvider _serviceProvider;
 
+    public Router(ServiceProvider serviceProvider)
+    {
+        _serviceProvider = serviceProvider;
+    }
     public void RegisterRoutes(Assembly assembly)
     {
         var controllerTypes = assembly.GetTypes().Where(t => typeof(BaseController).IsAssignableFrom(t) && !t.IsAbstract);
@@ -48,7 +54,7 @@ public class Router
             if (routeValues != null)
             {
                 var controllerType = route.MethodInfo.DeclaringType!;
-                var controllerInstance = (BaseController)Activator.CreateInstance(controllerType)!;
+                var controllerInstance = (BaseController)_serviceProvider.GetService(controllerType);
                 controllerInstance.SetContext(context);
 
                 var methodParams = await PrepareParametersAsync(route.MethodInfo, context, routeValues);
