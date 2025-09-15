@@ -21,11 +21,21 @@ public class TasksController : BaseController
         return Task.CompletedTask;
     }
 
-    [Route("GET", "/tasks/1")]
-    public Task GetTaskById()
+    [Route("GET", "/tasks/{id}")]
+    public Task GetTaskById([FromRoute] int id)
     {
-        var task = _tasks.FirstOrDefault(t => t.Id == 1);
-        HttpContext.Response.WriteJson(task);
+        var task = _tasks.FirstOrDefault(t => t.Id == id);
+
+        if (task == null)
+        {
+            HttpContext.Response.StatusCode = 404;
+            HttpContext.Response.WriteJson(new { message = $"Task with ID {id} not found." });
+        }
+        else
+        {
+            HttpContext.Response.WriteJson(task);
+        }
+
         return Task.CompletedTask;
     }
 }
