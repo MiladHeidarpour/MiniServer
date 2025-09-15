@@ -51,7 +51,7 @@ public class Router
                 var controllerInstance = (BaseController)Activator.CreateInstance(controllerType)!;
                 controllerInstance.SetContext(context);
 
-                var methodParams = PrepareParameters(route.MethodInfo, routeValues);
+                var methodParams = await PrepareParametersAsync(route.MethodInfo, context, routeValues);
 
                 await (Task)route.MethodInfo.Invoke(controllerInstance, methodParams)!;
                 return;
@@ -87,7 +87,7 @@ public class Router
         return routeValues;
     }
 
-    private object[] PrepareParameters(MethodInfo method, Dictionary<string, object> routeValues)
+    private async Task<object[]> PrepareParametersAsync(MethodInfo method, HttpContext context, Dictionary<string, object> routeValues)
     {
         var parameters = method.GetParameters();
         var result = new object[parameters.Length];
@@ -99,7 +99,15 @@ public class Router
             {
                 result[i] = Convert.ChangeType(value, param.ParameterType);
             }
+            else if (param.GetCustomAttribute<FromBodyAttribute>() != null)
+            {
+                result[i] = await BindFromBodyAsync(context, param.ParameterType);
+            }
         }
         return result;
+    }
+    private async Task<object> BindFromBodyAsync(HttpContext context, Type targetType)
+    {
+        return await System.Text.Json.JsonSerializer.DeserializeAsync(context.Request.Body, targetType, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
     }
 }
