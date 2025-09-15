@@ -1,4 +1,5 @@
 ﻿
+using MiniServer.Core.Http;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -24,7 +25,6 @@ public class HttpServer
         while (true)
         {
             var client = await _listener.AcceptTcpClientAsync();
-
             _ = HandleClientAsync(client);
         }
     }
@@ -32,11 +32,46 @@ public class HttpServer
     private async Task HandleClientAsync(TcpClient client)
     {
         using var stream = client.GetStream();
+        using var reader = new StreamReader(stream);
 
-        var responseText = "Hello from your own Server!";
-        var response = $"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {responseText.Length}\r\n\r\n{responseText}";
-        var responseBytes = Encoding.UTF8.GetBytes(response);
+        var requestLine = await reader.ReadLineAsync();
+        if (string.IsNullOrEmpty(requestLine)) return;
 
+        var requestParts = requestLine.Split(' ');
+        var request = new HttpRequest
+        {
+            Method = requestParts[0],
+            Path = requestParts[1]
+        };
+
+        string? line;
+        while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync()))
+        {
+            var headerParts = line.Split(':', 2);
+            if (headerParts.Length == 2)
+            {
+                request.Headers[headerParts[0]] = headerParts[1].Trim();
+            }
+        }
+
+        var response = new HttpResponse();
+        var context = new HttpContext(request, response);
+
+        if (context.Request.Path == "/")
+        {
+            context.Response.Write("Welcome to the homepage!");
+        }
+        else if (context.Request.Path == "/about")
+        {
+            context.Response.Write("This is the About page.");
+        }
+        else
+        {
+            context.Response.StatusCode = 404;
+            context.Response.StatusMessage = "Not Found";
+            context.Response.Write("Page not found.");
+        }
+        var responseBytes = context.Response.GetResponseBytes();
         await stream.WriteAsync(responseBytes);
 
         client.Close();
